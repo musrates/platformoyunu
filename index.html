@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Platform Oyunu</title>
+    <style>
+        canvas {
+            border: 1px solid black;
+            display: block;
+            margin: 0 auto;
+        }
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(45deg, #ff0000, #00ff00, #0000ff, #ffff00);
+            background-size: 400% 400%;
+            animation: gradient 15s ease infinite;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #startButton {
+            padding: 15px 30px;
+            font-size: 24px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #guide {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 16px;
+        }
+        #restartButton {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            font-size: 18px;
+            background-color: #f44336;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            display: none;
+        }
+        @keyframes gradient {
+            0% {
+                background-position: 0% 50%;
+            }
+            50% {
+                background-position: 100% 50%;
+            }
+            100% {
+                background-position: 0% 50%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="startScreen">
+        <div id="guide">
+            <h2>Nasıl Oynanır?</h2>
+            <p>Ok tuşlarıyla hareket et</p>
+            <p>Yukarı ok tuşuyla zıpla</p>
+            <p>Hedefin en yüksek puanı elde etmek</p>
+        </div>
+        <button id="startButton">Oyuna Başla</button>
+    </div>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <button id="restartButton" onclick="restartGame()">Yeniden Başla</button>
+    <script>
+        var canvas = document.getElementById('gameCanvas');
+        var ctx = canvas.getContext('2d');
+
+        // Ses dosyalarını yükle
+        var jumpSound = new Audio('jump.mp3');
+        var fallSound = new Audio('fall.mp3');
+        var backgroundMusic = new Audio('background_music.mp3');
+        backgroundMusic.loop = true; // Arka planda müziği döngüye al
+
+        var game = {
+            state: 'start', // Başlangıç durumu
+            speedIncreaseScore: 50, 
+            speedIncreaseAmount: 0.5, 
+            minX: 0,
+            maxX: canvas.width,
+            minY: 0,
+            maxY: canvas.height,
+            scrollingSpeed: 5 
+        };
+
+        var player = {
+            x: 50,
+            y: canvas.height - 50,
+            width: 50,
+            height: 50,
+            speed: 0,
+            maxSpeed: 5, 
+            acceleration: 0.2, 
+            jumpStrength: 10,
+            jumping: false,
+            velocityX: 0,
+            velocityY: 0,
+            gravity: 0.3,
+            lastPlatformY: canvas.height - 100
+        };
+
+        var ground = {
+            x: 0,
+            y: canvas.height - 20,
+            width: canvas.width,
+            height: 20
+        };
+
+        var platforms = [
+            { x: 150, y: canvas.height - 100, width: 100, height: 20 },
+            { x: 350, y: canvas.height - 200, width: 100, height: 20 },
+            { x: 550, y: canvas.height - 300, width: 100, height: 20 },
+            { x: 200, y: canvas.height - 400, width: 100, height: 20 },
+            { x: 450, y: canvas.height - 500, width: 100, height: 20 },
+            { x: 600, y: canvas.height - 600, width: 100, height: 20 }
+        ];
+
+        var score = 0;
+        let keys = [];
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'ArrowLeft') {
+                player.speed = -player.maxSpeed; 
+            } else if (event.key === 'ArrowRight') {
+                player.speed = player.maxSpeed; 
+            } else if (event.key === 'ArrowUp' && !player.jumping) {
+                player.jumping = true;
+                player.velocityY = -player.jumpStrength;
+                // Zıplama sesini çal
+                jumpSound.play();
+            } else if (event.key === 'r' && game.state === 'start') { // 'r' tuşuna basıldığında ve oyun durumu başlangıçta ise yeniden başlat
+                restartGame();
+                game.state = 'running';
+            }
+        });
+
+        document.addEventListener('keyup', function(event) {
+            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+                player.speed = 0;
+            } 
+        });
+
+        function gameLoop() {
+            if (game.state === 'running') {
+                update();
+                draw();
+            } else if (game.state === 'start') { // Başlangıç ekranını göster
+                drawStartScreen();
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function update() {
+            
+            if (player.speed !== 0) {
+                player.speed += player.acceleration * (player.speed > 0 ? -1 : 1); 
+                player.speed = Math.max(-player.maxSpeed, Math.min(player.speed, player.maxSpeed)); 
+            }
+
+            player.x += player.speed;
+            player.y += player.velocityY;
+
+            player.x = Math.max(game.minX, Math.min(player.x, game.maxX - player.width));
+            player.y = Math.max(game.minY, Math.min(player.y, game.maxY - player.height));
+
+            player.velocityY += player.gravity;
+
+            player.jumping = true;
+            for (var i = 0; i < platforms.length; i++) {
+                var p = platforms[i];
+                if (player.y < p.y && player.y + player.height > p.y && player.x + player.width > p.x && player.x < p.x + p.width) {
+                    player.jumping = false;
+                    player.velocityY = 0;
+                    player.y = p.y - player.height;
+                    if (player.y < p.y && player.y + player.height > p.y - 1 && player.lastPlatformY !== p.y) {
+                        score += 5;
+                        player.lastPlatformY = p.y;
+                    }
+                    break;
+                }
+            }
+
+            if (player.y + player.height > ground.y) {
+                player.jumping = false;
+                player.velocityY = 0;
+                player.y = ground.y - player.height;
+            }
+
+            if (score % game.speedIncreaseScore === 0 && score > 0) {
+                player.maxSpeed += game.speedIncreaseAmount;
+            }
+
+            if (player.y < canvas.height) {
+                var lastPlatform = platforms[platforms.length - 1];
+                if (lastPlatform.y < canvas.height - 100) {
+                    platforms.push({
+                        x: Math.random() * (canvas.width - 100),
+                        y: lastPlatform.y - 100, 
+                        width: 100,
+                        height: 20
+                    });
+                }
+            }
+
+            // Ekranın kaydırılması
+            if (player.y < canvas.height / 2) {
+                platforms.forEach(function(p) {
+                    p.y += game.scrollingSpeed; 
+                });
+                ground.y += game.scrollingSpeed; 
+                player.y += game.scrollingSpeed; 
+            }
+
+            if (player.y + player.height > canvas.height - 1 ) {
+                game.state = 'start'; // Oyunu başlangıç durumuna geri döndür
+                // Düşme sesini çal
+                fallSound.play();
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = 'green';
+            ctx.fillRect(ground.x, ground.y, ground.width, ground.height);
+
+            ctx.fillStyle = 'brown';
+            for (var i = 0; i < platforms.length; i++) {
+                var p = platforms[i];
+                ctx.fillRect(p.x, p.y, p.width, p.height);
+            }
+
+            ctx.fillStyle = 'blue';
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+
+            ctx.fillStyle = 'black';
+            ctx.font = '24px Arial';
+            ctx.fillText('Score: ' + score, 20, 40);
+
+            if (player.y + player.height > canvas.height - 1) {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.fillStyle = 'white';
+                ctx.font = '30px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('Game Over', canvas.width / 2, canvas.height / 2 - 20);
+
+                ctx.font = '20px Arial';
+                ctx.fillText('Yeniden Başla (r)', canvas.width / 2, canvas.height / 2 + 20);
+                document.getElementById('restartButton').style.display = 'block'; // Yeniden başlat düğmesini görünür yap
+            }
+        }
+
+        // Başlangıç ekranını çiz
+        function drawStartScreen() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'; // Arkaplanı hafifçe karart
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            var guide = document.getElementById('guide');
+            guide.style.display = 'block'; // Kılavuzu göster
+
+            // Oyuna başlama düğmesi ve ekranı ortala
+            var startButton = document.getElementById('startButton');
+            startButton.style.display = 'block';
+            startButton.style.left = (canvas.width - startButton.offsetWidth) / 2 + 'px';
+            startButton.style.top = (canvas.height - startButton.offsetHeight) / 2 + 'px';
+        }
+
+        function restartGame() {
+            player.x = 50;
+            player.y = canvas.height - 50;
+            player.speed = 0;
+            player.maxSpeed = 5;
+            player.velocityX = 0;
+            player.velocityY = 0;
+            player.lastPlatformY = canvas.height - 100;
+            platforms = [
+                { x: 150, y: canvas.height - 100, width: 100, height: 20 },
+                { x: 350, y: canvas.height - 200, width: 100, height: 20 },
+                { x: 550, y: canvas.height - 300, width: 100, height: 20 },
+                { x: 200, y: canvas.height - 400, width: 100, height: 20 },
+                { x: 450, y: canvas.height - 500, width: 100, height: 20 },
+                { x: 600, y: canvas.height - 600, width: 100, height: 20 }
+            ];
+            score = 0;
+            player.jumping = false; 
+            document.getElementById('restartButton').style.display = 'none'; // Yeniden başlat düğmesini gizle
+        }
+
+        // Başlangıç ekranı görünümü ve başlangıç düğmesi olayı
+        var startScreen = document.getElementById('startScreen');
+        var startButton = document.getElementById('startButton');
+
+        startButton.addEventListener('click', function() {
+            startScreen.style.display = 'none'; // Başlangıç ekranını gizle
+            game.state = 'running'; // Oyun durumunu çalışıyor olarak ayarla
+            backgroundMusic.play(); // Arka planda müziği çal
+            gameLoop(); // Oyun döngüsünü başlat
+        });
+
+    </script>
+</body>
+</html>
