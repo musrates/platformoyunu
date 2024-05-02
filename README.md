@@ -22,5 +22,5 @@ Oyunu çalıştırmak için tarayıcınızda bir HTML dosyasını açmanız yete
 
 ![](https://github.com/musrates/platformoyunu/assets/120391517/f8716fe9-347a-47fc-ab58-86c320a70b34)
 ![](https://github.com/musrates/platformoyunu/assets/120391517/83df6cbe-1f47-44d1-b1c1-c7b735402ae4)
-![](https://github.com/musrates/platformoyunu/assets/120391517/e9ffa5d2-f817-47b1-a923-beb18f5b9db2)
+![](https://github.com/musrates/platformoyunu/assets/120391517/26bd059e-0b37-4fc2-ae5c-49b83de38a73)
 
